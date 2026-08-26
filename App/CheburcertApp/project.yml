@@ -1,0 +1,27 @@
+name: Cheburcert
+options:
+  bundleIdPrefix: me.cheburcert
+  deploymentTarget:
+    macOS: "13.0"
+packages:
+  CheburcertCore:
+    path: ../..
+targets:
+  Cheburcert:
+    type: application
+    platform: macOS
+    sources: [.]
+    dependencies:
+      - package: CheburcertCore
+        product: CheburcertCore
+    settings:
+      base:
+        PRODUCT_NAME: Cheburcert
+        MARKETING_VERSION: "1.0"
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: Cheburcert.entitlements
+    info:
+      path: Info.plist
+      properties:
+        LSMinimumSystemVersion: "13.0"
+        CFBundleDisplayName: Cheburcert
