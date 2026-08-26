@@ -4,15 +4,15 @@ import X509
 public struct FirefoxInstaller: TrustStoreInstaller {
     let certutilPath: String
     let runner: CommandRunner
-    let profilesProvider: () -> [URL]
-    let isFirefoxRunning: () -> Bool
+    let profilesProvider: @Sendable () -> [URL]
+    let isFirefoxRunning: @Sendable () -> Bool
     let workDir: URL
 
     public init(
         certutilPath: String,
         runner: CommandRunner = ProcessCommandRunner(),
-        profiles: @escaping () -> [URL] = { FirefoxProfiles.discover() },
-        isFirefoxRunning: @escaping () -> Bool = FirefoxInstaller.defaultRunningCheck,
+        profiles: @escaping @Sendable () -> [URL] = { FirefoxProfiles.discover() },
+        isFirefoxRunning: @escaping @Sendable () -> Bool = FirefoxInstaller.defaultRunningCheck,
         workDir: URL
     ) {
         self.certutilPath = certutilPath
