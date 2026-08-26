@@ -36,10 +36,15 @@ public struct CheburcertService: Sendable {
         try domainStore.save(domains)
     }
 
-    /// Remove from all stores. Keeps the saved domain list by default.
+    /// Remove from all stores and delete persisted key/cert so status flips to "off".
+    /// Keeps the saved domain list by default.
     public func removeAll() throws {
         try? firefox.removeAll()
         try keychain.removeAll()
+        // Delete persisted artifacts AppModel.refreshStatus keys "installed" on.
+        // Keep the domain list — the user keeps their list.
+        try? FileManager.default.removeItem(at: keyStore.keyFile)
+        try? FileManager.default.removeItem(at: keyStore.certFile)
     }
 
     public func savedDomains() -> [String] { (try? domainStore.load()) ?? [] }
