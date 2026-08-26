@@ -10,7 +10,10 @@ targets:
   Cheburcert:
     type: application
     platform: macOS
-    sources: [.]
+    sources:
+      - path: .
+      - path: Resources
+        buildPhase: resources
     dependencies:
       - package: CheburcertCore
         product: CheburcertCore
