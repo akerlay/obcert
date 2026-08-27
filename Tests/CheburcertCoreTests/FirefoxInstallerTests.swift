@@ -41,11 +41,11 @@ final class FirefoxInstallerTests: XCTestCase {
 
         let addCalls = runner.calls.filter { $0.arguments.contains("-A") }
         let crossAdd = addCalls.first {
-            $0.arguments.contains("Cheburcert Cross")
+            $0.arguments.contains("obcert Cross")
         }
         XCTAssertNotNil(crossAdd)
         XCTAssertTrue(crossAdd?.arguments.contains(",,") ?? false)
-        XCTAssertTrue(addCalls.contains { $0.arguments.contains("Cheburcert Intermediate 0") })
+        XCTAssertTrue(addCalls.contains { $0.arguments.contains("obcert Intermediate 0") })
     }
 
     func testRemoveAllDeletesLocalRootCrossAndIntermediateNicknames() throws {
@@ -58,8 +58,8 @@ final class FirefoxInstallerTests: XCTestCase {
 
         let delCalls = runner.calls.filter { $0.arguments.contains("-D") }
         XCTAssertTrue(delCalls.contains { $0.arguments.contains(KeychainInstaller.localRootCN) })
-        XCTAssertTrue(delCalls.contains { $0.arguments.contains("Cheburcert Cross") })
-        XCTAssertTrue(delCalls.contains { $0.arguments.contains("Cheburcert Intermediate 0") })
+        XCTAssertTrue(delCalls.contains { $0.arguments.contains("obcert Cross") })
+        XCTAssertTrue(delCalls.contains { $0.arguments.contains("obcert Intermediate 0") })
     }
 
     func testThrowsWhenFirefoxRunning() throws {

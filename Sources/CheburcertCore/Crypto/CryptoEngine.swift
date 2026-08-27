@@ -19,8 +19,8 @@ public enum CryptoEngine {
         // 1. Local constrained root CA (ECDSA P384).
         let localKey = localKeyOverride ?? Certificate.PrivateKey(P384.Signing.PrivateKey())
         let localDN = try DistinguishedName {
-            CommonName("Cheburcert Local Constrained Root")
-            OrganizationName("Cheburcert")
+            CommonName("obcert Local Constrained Root")
+            OrganizationName("obcert")
         }
         let localSKI = SubjectKeyIdentifier(hash: localKey.publicKey)
         let localRoot = try Certificate(

@@ -1,13 +1,13 @@
-name: Cheburcert
+name: obcert
 options:
-  bundleIdPrefix: me.cheburcert
+  bundleIdPrefix: me.obcert
   deploymentTarget:
     macOS: "13.0"
 packages:
   CheburcertCore:
     path: ../..
 targets:
-  Cheburcert:
+  obcert:
     type: application
     platform: macOS
     sources:
@@ -19,12 +19,14 @@ targets:
         product: CheburcertCore
     settings:
       base:
-        PRODUCT_NAME: Cheburcert
+        PRODUCT_NAME: obcert
         MARKETING_VERSION: "1.0"
         ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_ENTITLEMENTS: Cheburcert.entitlements
+        CODE_SIGN_ENTITLEMENTS: obcert.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: Info.plist
       properties:
         LSMinimumSystemVersion: "13.0"
-        CFBundleDisplayName: Cheburcert
+        CFBundleDisplayName: obcert
+        CFBundleName: obcert

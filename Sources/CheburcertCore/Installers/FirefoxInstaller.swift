@@ -23,9 +23,9 @@ public struct FirefoxInstaller: TrustStoreInstaller {
     }
 
     /// Cross-cert nickname used across install/removeAll.
-    static let crossNickname = "Cheburcert Cross"
+    static let crossNickname = "obcert Cross"
     /// Nickname for intermediate at index `i`.
-    static func intermediateNickname(_ i: Int) -> String { "Cheburcert Intermediate \(i)" }
+    static func intermediateNickname(_ i: Int) -> String { "obcert Intermediate \(i)" }
     /// Upper bound of intermediates removeAll clears when it has no bundle.
     static let intermediateSweepCount = 10
 

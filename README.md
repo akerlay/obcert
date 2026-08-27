@@ -1,8 +1,8 @@
-# Cheburcert
+# obcert
 
 Доверяй корневому сертификату Минцифры РФ только для нужных доменов.
 
-Cheburcert создаёт локальный доверенный корень с ограничением по доменам
+obcert создаёт локальный доверенный корень с ограничением по доменам
 (`nameConstraints`) и кросс-подписывает им корень Минцифры. Реальные сертификаты
 Минцифры принимаются только для доменов из вашего списка (и их поддоменов).
 
@@ -17,7 +17,7 @@ swift test                      # ядро (CheburcertCore)
 brew install nss xcodegen
 ./scripts/bundle-certutil.sh
 cd App/CheburcertApp && xcodegen generate
-xcodebuild -scheme Cheburcert -configuration Release build
+xcodebuild -scheme obcert -configuration Release build
 ```
 
 ## Как это работает

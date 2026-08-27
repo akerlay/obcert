@@ -24,7 +24,7 @@ final class KeychainInstallerTests: XCTestCase {
         try installer.removeAll()
         XCTAssertEqual(priv.batches.count, 1)
         XCTAssertTrue(priv.batches[0].contains("delete-certificate"))
-        XCTAssertTrue(priv.batches[0].contains("Cheburcert Local Constrained Root"))
+        XCTAssertTrue(priv.batches[0].contains("obcert Local Constrained Root"))
     }
 
     func testInstallBatchFailsFastWithSetE() throws {

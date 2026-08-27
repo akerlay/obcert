@@ -4,7 +4,7 @@ import SwiftASN1
 import X509
 
 public struct KeychainInstaller: TrustStoreInstaller {
-    public static let localRootCN = "Cheburcert Local Constrained Root"
+    public static let localRootCN = "obcert Local Constrained Root"
     let privileged: PrivilegedRunner
     let workDir: URL
     let systemKeychain = "/Library/Keychains/System.keychain"
