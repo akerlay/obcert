@@ -49,6 +49,10 @@ public struct KeychainInstaller: TrustStoreInstaller {
         try hashes.joined(separator: "\n").write(to: manifestFile, atomically: true, encoding: .utf8)
 
         // Idempotent cleanup: remove anything a previous apply left (ignore failures).
+        // Delete every prior local root BY NAME — when the domain list changes the new
+        // root has a different hash, so a hash-only delete would leave the old (stale,
+        // differently-constrained) root trusted alongside the new one.
+        _ = try? runner.run("/usr/bin/security", ["delete-certificate", "-c", Self.localRootCN] + keychainArgs)
         for h in hashes {
             _ = try? runner.run("/usr/bin/security", ["delete-certificate", "-Z", h] + keychainArgs)
         }

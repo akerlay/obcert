@@ -22,5 +22,9 @@ struct ContentView: View {
             get: { model.lastError != nil }, set: { if !$0 { model.lastError = nil } })) {
             Button("OK", role: .cancel) { model.lastError = nil }
         } message: { Text(model.lastError ?? "") }
+        .alert("Защита включена", isPresented: Binding(
+            get: { model.lastInfo != nil }, set: { if !$0 { model.lastInfo = nil } })) {
+            Button("OK", role: .cancel) { model.lastInfo = nil }
+        } message: { Text(model.lastInfo ?? "") }
     }
 }

@@ -11,6 +11,7 @@ final class AppModel: ObservableObject {
     @Published var status: String = "Проверка…"
     @Published var isBusy = false
     @Published var lastError: String?
+    @Published var lastInfo: String?
     @Published var installState: InstallState = .notInstalled
 
     // Original-root gate
@@ -59,10 +60,14 @@ final class AppModel: ObservableObject {
         isBusy = true; lastError = nil
         let ds = domains
         Task {
-            do { try await service.apply(domains: ds) }
+            var ok = false
+            do { try await service.apply(domains: ds); ok = true }
             catch let e as CheburcertError { lastError = Self.message(for: e) }
             catch { lastError = error.localizedDescription }
             refreshStatus(); isBusy = false
+            if ok {
+                lastInfo = "Готово. Перезапустите браузеры (полностью закройте и откройте заново), чтобы изменения вступили в силу — Chrome и Safari перечитывают доверие к сертификатам только при запуске."
+            }
         }
     }
 
