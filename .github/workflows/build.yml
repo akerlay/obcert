@@ -3,39 +3,125 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
 jobs:
-  test-and-build:
-    name: Test core & build app
+  test:
+    name: Test CheburcertCore
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - run: swift --version && xcodebuild -version
+      - run: swift test
 
-      - name: Show toolchain
-        run: swift --version && xcodebuild -version
+  build:
+    name: Build obcert (${{ matrix.arch }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14   # Apple Silicon
+            arch: arm64
+          - runner: macos-13   # Intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    env:
+      # Hoist secret presence into plain env flags (secrets aren't reliable in `if:`).
+      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
+      HAS_NOTARY: ${{ secrets.MACOS_NOTARY_APPLE_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Test CheburcertCore
-        run: swift test
-
-      - name: Install build tools (nss, xcodegen)
+      - name: Install build tools
         run: brew install nss xcodegen
 
-      - name: Bundle self-contained certutil
-        run: ./scripts/bundle-certutil.sh
+      - name: Bundle self-contained certutil (this arch)
+        run: ./scripts/bundle-certutil.sh "$(brew --prefix nss)/bin/certutil"
 
       - name: Generate Xcode project
         working-directory: App/CheburcertApp
         run: xcodegen generate
 
-      - name: Build obcert app
+      - name: Build (Release, ${{ matrix.arch }}, ad-hoc signed)
         working-directory: App/CheburcertApp
         run: |
           xcodebuild \
             -project obcert.xcodeproj \
             -scheme obcert \
             -configuration Release \
-            -destination 'platform=macOS,arch=arm64' \
-            CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath build \
+            ARCHS=${{ matrix.arch }} ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES \
             build
+          echo "APP=$PWD/build/Build/Products/Release/obcert.app" >> "$GITHUB_ENV"
+
+      # ---- Optional real signing + notarization (only if the secrets are configured) ----
+      - name: Import Developer ID certificate
+        if: ${{ env.HAS_SIGNING == 'true' }}
+        env:
+          CERT_B64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERT_PWD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/build.keychain-db"
+          KC_PWD="$(uuidgen)"
+          security create-keychain -p "$KC_PWD" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PWD" "$KC"
+          echo "$CERT_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$CERT_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PWD" "$KC"
+          security list-keychains -d user -s "$KC" login.keychain-db
+          echo "SIGN_KEYCHAIN=$KC" >> "$GITHUB_ENV"
+
+      - name: Codesign (Developer ID, hardened runtime)
+        if: ${{ env.HAS_SIGNING == 'true' }}
+        env:
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}   # e.g. "Developer ID Application: Name (TEAMID)"
+        run: |
+          codesign --force --deep --options runtime --timestamp \
+            --entitlements App/CheburcertApp/obcert.entitlements \
+            --sign "$IDENTITY" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Notarize + staple
+        if: ${{ env.HAS_NOTARY == 'true' }}
+        env:
+          APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          APP_PWD: ${{ secrets.MACOS_NOTARY_APP_PASSWORD }}   # app-specific password
+        run: |
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PWD" --wait
+          xcrun stapler staple "$APP"
+
+      # ---- Package + upload ----
+      - name: Package .app
+        run: |
+          ditto -c -k --keepParent "$APP" "obcert-${{ matrix.arch }}.zip"
+          echo "Signed identity:"; codesign -dvv "$APP" 2>&1 | grep -E "Authority|Signature" || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obcert-${{ matrix.arch }}
+          path: obcert-${{ matrix.arch }}.zip
+          if-no-files-found: error
+
+  # Attach both arch zips to a GitHub Release when a v* tag is pushed.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist }
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.zip

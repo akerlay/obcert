@@ -123,6 +123,31 @@ xcodebuild -scheme obcert -configuration Release build
 Готовый `.dmg` (с подписью и нотаризацией) собирается через `scripts/make-dmg.sh`
 (нужны переменные окружения `DEVELOPER_ID_APP` и `NOTARY_PROFILE`).
 
+### GitHub CI
+
+`.github/workflows/build.yml` на каждый push в `main` / PR / вручную:
+
+1. Запускает `swift test`.
+2. Матрицей собирает **два отдельных билда** — `arm64` (раннер `macos-14`) и
+   `x86_64` (раннер `macos-13`), каждый со своим `certutil` под нужную архитектуру.
+3. Кладёт `obcert-arm64.zip` и `obcert-x86_64.zip` в **Artifacts** запуска.
+
+**Подпись.** По умолчанию билды подписаны ad-hoc — запускаются локально, но при
+скачивании Gatekeeper потребует «Открыть» через правый клик. Для полноценной
+подписи Developer ID + нотаризации добавь секреты репозитория (тогда шаги подписи
+включатся автоматически):
+
+| Секрет | Что это |
+|---|---|
+| `MACOS_CERTIFICATE_P12_BASE64` | `.p12` сертификата Developer ID Application, `base64` |
+| `MACOS_CERTIFICATE_PASSWORD` | пароль от `.p12` |
+| `MACOS_SIGN_IDENTITY` | `Developer ID Application: Имя (TEAMID)` |
+| `MACOS_NOTARY_APPLE_ID` | Apple ID для нотаризации |
+| `MACOS_NOTARY_TEAM_ID` | Team ID |
+| `MACOS_NOTARY_APP_PASSWORD` | app-specific password для нотаризации |
+
+Push тега `vX.Y.Z` дополнительно публикует оба zip в GitHub Release.
+
 ---
 
 ## Ручная проверка (полный сценарий)
