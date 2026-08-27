@@ -13,6 +13,7 @@ obcert — приложение для macOS. Оно позволяет откр
 - Запустить .dmg и перетащить obcert в Applications
 - С вероятностью 99.9% macos заблокирует установку и нужно будет подтвердить ее в System settings -> privacy and security
 <img width="709" height="200" alt="image" src="https://github.com/user-attachments/assets/d83a36af-7d80-46f9-9ce1-94dee3521ac1" />
+
 - Подтверждаем установку паролем / отпечатком
 - Готово, obcert теперь среди ваших приложений и вы можете управлять доверием к определенным доменам
 
