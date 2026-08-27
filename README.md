@@ -1,5 +1,3 @@
-<img width="709" height="200" alt="image" src="https://github.com/user-attachments/assets/65fddc09-67b9-4af9-83e5-838769fde508" /># obcert
-
 **Доверяй корневому сертификату Минцифры РФ только для нужных доменов.**
 
 obcert — приложение для macOS. Оно позволяет открывать российские сайты, которые
