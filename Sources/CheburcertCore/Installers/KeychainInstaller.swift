@@ -57,11 +57,16 @@ public struct KeychainInstaller: TrustStoreInstaller {
             _ = try? runner.run("/usr/bin/security", ["delete-certificate", "-Z", h] + keychainArgs)
         }
 
-        // Bridging certs: added untrusted, no authorization prompt.
-        for path in [crossPath] + interPaths {
-            try runOrThrow(["add-certificates"] + keychainArgs + [path])
+        // Add every cert to the keychain first (local root included). This is required:
+        // `add-trusted-cert` on a cert that is NOT already in the keychain silently
+        // no-ops instead of importing + trusting it, so the local root must be imported
+        // here before it can be trusted. `add-certificates` exits non-zero when a cert is
+        // already present ("already in ... keychain") — harmless, so failures are ignored.
+        for path in [localRootPath, crossPath] + interPaths {
+            _ = try? runner.run("/usr/bin/security", ["add-certificates"] + keychainArgs + [path])
         }
-        // Trust anchor: user-domain trust. Presents the native macOS trust dialog.
+        // Trust anchor: mark the (now-imported) local root as a user-domain trusted root.
+        // Presents the native macOS trust dialog; this is the one command that must succeed.
         try runOrThrow(["add-trusted-cert", "-r", "trustRoot"] + keychainArgs + [localRootPath])
     }
 

@@ -21,9 +21,9 @@ final class KeychainInstallerTests: XCTestCase {
         let installer = KeychainInstaller(runner: runner, workDir: tempDir())
         try installer.install(bundle)
 
-        // add-certificates for cross + one intermediate (untrusted bridging certs)
+        // add-certificates for localRoot + cross + one intermediate (import before trust)
         let addCerts = runner.calls.filter { $0.arguments.first == "add-certificates" }
-        XCTAssertEqual(addCerts.count, 2)
+        XCTAssertEqual(addCerts.count, 3)
         // exactly one trusted-root add, user domain (no -d), with -r trustRoot
         let trustCalls = runner.calls.filter { $0.arguments.first == "add-trusted-cert" }
         XCTAssertEqual(trustCalls.count, 1)
