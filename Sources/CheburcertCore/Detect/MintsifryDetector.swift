@@ -59,16 +59,32 @@ public struct MintsifryDetector: Sendable {
         return OriginalRootPresence(isPresent: !hashes.isEmpty, sha1Hashes: hashes)
     }
 
-    /// Remove the detected original root from the keychains (one admin prompt).
+    /// Remove the detected original root.
+    ///
+    /// First delete it in the USER context (the user's default keychain search list
+    /// includes the login keychain — deleting a cert there needs no admin). Only if the
+    /// original is STILL present afterwards (i.e. it lives in the System keychain) do we
+    /// escalate to an admin prompt to delete from System. This covers both the common
+    /// case (original in System, needs admin) and the login-keychain case (no admin) —
+    /// and, crucially, running the System delete as root works because it targets the
+    /// System keychain explicitly rather than root's default search list.
     public func remove(_ presence: OriginalRootPresence, privileged: PrivilegedRunner) throws {
         guard !presence.sha1Hashes.isEmpty else { return }
+
+        // 1. User-context deletion (login / user keychains), no admin.
+        // delete-certificate removes one match per call, so a few passes clear duplicates.
+        for h in presence.sha1Hashes {
+            for _ in 0..<3 {
+                let res = try? runner.run("/usr/bin/security", ["delete-certificate", "-Z", h])
+                if res?.exitCode != 0 { break } // nothing left to delete for this hash
+            }
+        }
+
+        // 2. If the original still resolves, it must be in the System keychain — escalate.
+        guard (try? detect())?.isPresent == true else { return }
         var lines = ["set -e"]
         for h in presence.sha1Hashes {
-            for kc in keychains {
-                lines.append("/usr/bin/security delete-certificate -Z \(h) \(kc) || true")
-            }
-            // Also try the default search list (covers login keychain).
-            lines.append("/usr/bin/security delete-certificate -Z \(h) || true")
+            lines.append("/usr/bin/security delete-certificate -Z \(h) /Library/Keychains/System.keychain || true")
         }
         try privileged.runScript(lines.joined(separator: "; "))
     }

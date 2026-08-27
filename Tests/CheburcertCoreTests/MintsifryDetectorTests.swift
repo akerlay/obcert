@@ -38,7 +38,9 @@ final class MintsifryDetectorTests: XCTestCase {
         XCTAssertEqual(try det.detect(), .absent)
     }
 
-    func testRemoveComposesPrivilegedDeleteByHash() throws {
+    // System-keychain case: the cert still resolves after the user-context delete
+    // (mock always returns it), so removal escalates to a privileged System delete.
+    func testRemoveEscalatesToSystemWhenStillPresent() throws {
         let pem = try realRootPEM()
         let runner = MockCommandRunner()
         runner.resultForCall = { _ in CommandResult(exitCode: 0, stdout: pem, stderr: "") }
@@ -49,6 +51,31 @@ final class MintsifryDetectorTests: XCTestCase {
         try det.remove(presence, privileged: priv)
         XCTAssertEqual(priv.batches.count, 1)
         XCTAssertTrue(priv.batches[0].contains("delete-certificate -Z"))
+        XCTAssertTrue(priv.batches[0].contains("/Library/Keychains/System.keychain"))
         XCTAssertTrue(priv.batches[0].contains(presence.sha1Hashes[0]))
+    }
+
+    // Login-keychain case: the user-context delete removes it, so a re-detect finds it
+    // gone and NO admin escalation happens.
+    func testRemoveFromLoginNeedsNoAdmin() throws {
+        let pem = try realRootPEM()
+        let runner = MockCommandRunner()
+        var deleted = false
+        runner.resultForCall = { call in
+            if call.arguments.first == "delete-certificate" {
+                deleted = true
+                return CommandResult(exitCode: 0, stdout: "", stderr: "")
+            }
+            // find-certificate: returns the original until a delete has happened.
+            return CommandResult(exitCode: 0, stdout: deleted ? "" : pem, stderr: "")
+        }
+        let det = MintsifryDetector(runner: runner,
+            expectedFingerprint: try XCTUnwrap(MintsifrySource.expectedRootFingerprint))
+        let presence = try det.detect()
+        XCTAssertTrue(presence.isPresent)
+        let priv = MockPrivilegedRunner()
+        try det.remove(presence, privileged: priv)
+        XCTAssertTrue(priv.batches.isEmpty, "login-keychain removal must not prompt for admin")
+        XCTAssertTrue(runner.calls.contains { $0.arguments.first == "delete-certificate" })
     }
 }
