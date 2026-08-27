@@ -56,6 +56,12 @@ jobs:
         run: |
           "$XCODEGEN" generate
 
+      - name: Resolve Swift package dependencies
+        working-directory: App/CheburcertApp
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project obcert.xcodeproj -scheme obcert -derivedDataPath build
+
       - name: Build (Release, ${{ matrix.arch }}, ad-hoc signed)
         working-directory: App/CheburcertApp
         run: |
