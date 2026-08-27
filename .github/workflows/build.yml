@@ -35,15 +35,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build tools
-        run: brew install nss xcodegen
+      - name: Install nss
+        run: brew install nss
+
+      - name: Install XcodeGen (pinned — emits an Xcode-15-compatible project format)
+        run: |
+          curl -fsSL -o /tmp/xcodegen.zip \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.41.0/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xg
+          BIN="$(find /tmp/xg -type f -name xcodegen | head -1)"
+          chmod +x "$BIN"
+          "$BIN" --version
+          echo "XCODEGEN=$BIN" >> "$GITHUB_ENV"
 
       - name: Bundle self-contained certutil (this arch)
         run: ./scripts/bundle-certutil.sh "$(brew --prefix nss)/bin/certutil"
 
       - name: Generate Xcode project
         working-directory: App/CheburcertApp
-        run: xcodegen generate
+        run: "$XCODEGEN" generate
 
       - name: Build (Release, ${{ matrix.arch }}, ad-hoc signed)
         working-directory: App/CheburcertApp
