@@ -6,7 +6,7 @@ final class ServiceRemoveTests: XCTestCase {
     func testRemoveAllDeletesPersistedKeyAndCertButKeepsDomains() async throws {
         let pki = try TestPKI()
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let priv = MockPrivilegedRunner()
+        let kcRunner = MockCommandRunner()
         let ffRunner = MockCommandRunner()
 
         let keyStore = KeyStore(keyFile: tmp.appendingPathComponent("k.pem"),
@@ -16,7 +16,7 @@ final class ServiceRemoveTests: XCTestCase {
         let service = CheburcertService(
             fetch: { FetchedCerts(root: pki.root, intermediates: [pki.intermediate],
                                   rootFingerprint: try CertFetcher.sha256Fingerprint(pki.root)) },
-            keychain: KeychainInstaller(privileged: priv, workDir: tmp),
+            keychain: KeychainInstaller(runner: kcRunner, workDir: tmp),
             firefox: FirefoxInstaller(certutilPath: "/opt/certutil", runner: ffRunner,
                                       profiles: { [URL(fileURLWithPath: "/p/one")] },
                                       isFirefoxRunning: { false }, workDir: tmp),

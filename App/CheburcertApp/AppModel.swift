@@ -27,7 +27,7 @@ final class AppModel: ObservableObject {
         let workDir = AppPaths.appSupport.appendingPathComponent("work")
         self.service = CheburcertService(
             fetch: { try await CertFetcher().fetch() },
-            keychain: KeychainInstaller(privileged: OSAScriptPrivilegedRunner(), workDir: workDir),
+            keychain: KeychainInstaller(workDir: workDir),
             firefox: FirefoxInstaller(certutilPath: certutil, workDir: workDir))
         self.domains = service.savedDomains()
         refreshStatus()

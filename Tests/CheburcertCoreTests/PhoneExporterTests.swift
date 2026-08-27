@@ -48,7 +48,7 @@ final class PhoneExporterTests: XCTestCase {
         let service = CheburcertService(
             fetch: { FetchedCerts(root: pki.root, intermediates: [pki.intermediate],
                                   rootFingerprint: try CertFetcher.sha256Fingerprint(pki.root)) },
-            keychain: KeychainInstaller(privileged: MockPrivilegedRunner(), workDir: tmp),
+            keychain: KeychainInstaller(runner: MockCommandRunner(), workDir: tmp),
             firefox: FirefoxInstaller(certutilPath: "/opt/certutil", runner: MockCommandRunner(),
                                       profiles: { [] }, isFirefoxRunning: { false }, workDir: tmp),
             domainStore: DomainStore(file: tmp.appendingPathComponent("d.json")),

@@ -6,13 +6,13 @@ final class ServiceTests: XCTestCase {
     func testApplyBuildsInstallsBothStoresAndPersists() async throws {
         let pki = try TestPKI()
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let priv = MockPrivilegedRunner()
+        let kcRunner = MockCommandRunner()
         let ffRunner = MockCommandRunner()
 
         let service = CheburcertService(
             fetch: { FetchedCerts(root: pki.root, intermediates: [pki.intermediate],
                                   rootFingerprint: try CertFetcher.sha256Fingerprint(pki.root)) },
-            keychain: KeychainInstaller(privileged: priv, workDir: tmp),
+            keychain: KeychainInstaller(runner: kcRunner, workDir: tmp),
             firefox: FirefoxInstaller(certutilPath: "/opt/certutil", runner: ffRunner,
                                       profiles: { [URL(fileURLWithPath: "/p/one")] },
                                       isFirefoxRunning: { false }, workDir: tmp),
@@ -22,7 +22,7 @@ final class ServiceTests: XCTestCase {
 
         try await service.apply(domains: ["sberbank.ru"])
 
-        XCTAssertEqual(priv.batches.count, 1)
+        XCTAssertTrue(kcRunner.calls.contains { $0.arguments.first == "add-trusted-cert" })
         XCTAssertTrue(ffRunner.calls.contains { $0.arguments.contains("-A") })
         XCTAssertEqual(try DomainStore(file: tmp.appendingPathComponent("d.json")).load(), ["sberbank.ru"])
     }

@@ -3,59 +3,85 @@ import Crypto
 import SwiftASN1
 import X509
 
+/// Installs the trust bundle into the macOS keychain.
+///
+/// Runs `security` DIRECTLY as the user (not via `osascript … with administrator
+/// privileges`). Setting a trusted root calls `SecTrustSettingsSetTrustSettings`,
+/// which must be able to present its authorization dialog — impossible in the
+/// detached root context an osascript-admin batch runs in (it fails with
+/// "authorization denied … no user interaction was possible"). Run directly in the
+/// user's GUI session, macOS shows the native trust dialog and the user approves.
+///
+/// The local root is trusted in the USER trust domain (login keychain); the cross-cert
+/// and intermediates are added untrusted so the chain can build. User-domain trust is
+/// honored by Safari and Chrome for the current user — sufficient for a single-user Mac
+/// and requiring no admin password.
 public struct KeychainInstaller: TrustStoreInstaller {
     public static let localRootCN = "obcert Local Constrained Root"
-    let privileged: PrivilegedRunner
+    let runner: CommandRunner
     let workDir: URL
-    let systemKeychain = "/Library/Keychains/System.keychain"
+    /// Keychain to target; nil = the user's default (login) keychain.
+    let keychain: String?
 
     /// Manifest of SHA-1 hashes installed, so `removeAll` can delete by hash without a bundle.
     var manifestFile: URL { workDir.appendingPathComponent("keychain-installed.txt") }
 
-    public init(privileged: PrivilegedRunner, workDir: URL) {
-        self.privileged = privileged
+    public init(runner: CommandRunner = ProcessCommandRunner(), workDir: URL, keychain: String? = nil) {
+        self.runner = runner
         self.workDir = workDir
+        self.keychain = keychain
     }
+
+    private var keychainArgs: [String] { keychain.map { ["-k", $0] } ?? [] }
 
     public func install(_ bundle: TrustBundle) throws {
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
-        let localRootPath = try write(bundle.localRoot, "cheburcert-localroot.crt")
-        let crossPath = try write(bundle.crossCert, "cheburcert-cross.crt")
+        let localRootPath = try write(bundle.localRoot, "obcert-localroot.crt")
+        let crossPath = try write(bundle.crossCert, "obcert-cross.crt")
         var interPaths: [String] = []
         for (i, cert) in bundle.intermediates.enumerated() {
-            interPaths.append(try write(cert, "cheburcert-inter-\(i).crt"))
+            interPaths.append(try write(cert, "obcert-inter-\(i).crt"))
         }
 
-        // SHA-1 hashes of every cert we install; used for idempotent delete-first and the manifest.
+        // SHA-1 hashes of every cert we install; for idempotent delete-first and the manifest.
         var hashes = [try Self.sha1Hash(bundle.localRoot), try Self.sha1Hash(bundle.crossCert)]
         hashes += try bundle.intermediates.map { try Self.sha1Hash($0) }
         try hashes.joined(separator: "\n").write(to: manifestFile, atomically: true, encoding: .utf8)
 
-        var lines: [String] = ["set -e"]
-        // Idempotent cleanup: delete anything a previous apply left, by hash and by CN.
+        // Idempotent cleanup: remove anything a previous apply left (ignore failures).
         for h in hashes {
-            lines.append("/usr/bin/security delete-certificate -Z \(h) \(systemKeychain) || true")
+            _ = try? runner.run("/usr/bin/security", ["delete-certificate", "-Z", h] + keychainArgs)
         }
-        lines.append("/usr/bin/security delete-certificate -c '\(Self.localRootCN)' \(systemKeychain) || true")
-        // Adds must fail-fast (no `|| true`).
-        lines.append("/usr/bin/security add-trusted-cert -d -r trustRoot -k \(systemKeychain) '\(localRootPath)'")
-        lines.append("/usr/bin/security add-certificates -k \(systemKeychain) '\(crossPath)'")
-        for p in interPaths {
-            lines.append("/usr/bin/security add-certificates -k \(systemKeychain) '\(p)'")
+
+        // Bridging certs: added untrusted, no authorization prompt.
+        for path in [crossPath] + interPaths {
+            try runOrThrow(["add-certificates"] + keychainArgs + [path])
         }
-        try privileged.runScript(lines.joined(separator: "; "))
+        // Trust anchor: user-domain trust. Presents the native macOS trust dialog.
+        try runOrThrow(["add-trusted-cert", "-r", "trustRoot"] + keychainArgs + [localRootPath])
     }
 
     public func removeAll() throws {
-        var lines: [String] = ["set -e"]
         if let manifest = try? String(contentsOf: manifestFile, encoding: .utf8) {
             for h in manifest.split(whereSeparator: \.isNewline) where !h.isEmpty {
-                lines.append("/usr/bin/security delete-certificate -Z \(h) \(systemKeychain) || true")
+                _ = try? runner.run("/usr/bin/security",
+                                    ["delete-certificate", "-Z", String(h)] + keychainArgs)
             }
         }
-        // Belt-and-suspenders for the trust anchor.
-        lines.append("/usr/bin/security delete-certificate -c '\(Self.localRootCN)' \(systemKeychain) || true")
-        try privileged.runScript(lines.joined(separator: "; "))
+        // Belt-and-suspenders for the trust anchor (removes cert and its user trust settings).
+        _ = try? runner.run("/usr/bin/security",
+                            ["delete-certificate", "-c", Self.localRootCN] + keychainArgs)
+    }
+
+    /// Run a `security` subcommand, mapping a user cancel to `.authorizationDenied`.
+    private func runOrThrow(_ args: [String]) throws {
+        let res = try runner.run("/usr/bin/security", args)
+        guard res.exitCode != 0 else { return }
+        let err = res.stderr.lowercased()
+        if err.contains("-128") || err.contains("cancel") || err.contains("user canceled") {
+            throw CheburcertError.authorizationDenied
+        }
+        throw CheburcertError.commandFailed(command: "security", exitCode: res.exitCode, stderr: res.stderr)
     }
 
     /// SHA-1 over the cert's DER, as bare UPPERCASE hex (what `security -Z` expects).

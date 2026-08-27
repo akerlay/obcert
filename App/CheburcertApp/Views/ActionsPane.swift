@@ -7,7 +7,7 @@ struct ActionsPane: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Применить изменения").font(.headline)
-                    Text("Пересоберём ограниченный корень и обновим браузеры. Потребуется пароль администратора.")
+                    Text("Пересоберём ограниченный корень и обновим браузеры. macOS попросит подтвердить доверие сертификату (пароль пользователя).")
                         .font(.caption).foregroundStyle(.secondary)
                     Button {
                         model.apply()
