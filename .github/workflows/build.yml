@@ -1,0 +1,41 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    name: Test core & build app
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version && xcodebuild -version
+
+      - name: Test CheburcertCore
+        run: swift test
+
+      - name: Install build tools (nss, xcodegen)
+        run: brew install nss xcodegen
+
+      - name: Bundle self-contained certutil
+        run: ./scripts/bundle-certutil.sh
+
+      - name: Generate Xcode project
+        working-directory: App/CheburcertApp
+        run: xcodegen generate
+
+      - name: Build obcert app
+        working-directory: App/CheburcertApp
+        run: |
+          xcodebuild \
+            -project obcert.xcodeproj \
+            -scheme obcert \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
