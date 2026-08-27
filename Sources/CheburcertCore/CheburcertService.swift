@@ -36,6 +36,19 @@ public struct CheburcertService: Sendable {
         try domainStore.save(domains)
     }
 
+    /// Build the trust bundle for the given domains WITHOUT installing anything
+    /// (used by phone export). Reuses the stored CA key when present.
+    public func buildBundleForExport(domains rawDomains: [String]) async throws -> TrustBundle {
+        let domains = try DomainList.normalizedUnique(rawDomains)
+        guard !domains.isEmpty else { throw CheburcertError.invalidDomain("(empty list)") }
+        let fetched = try await fetch()
+        let existingKey = try? keyStore.loadKey()
+        return try CryptoEngine.buildTrustBundle(
+            domains: domains, mintsifryRoot: fetched.root,
+            mintsifryIntermediates: fetched.intermediates,
+            localKeyOverride: existingKey ?? nil)
+    }
+
     /// Remove from all stores and delete persisted key/cert so status flips to "off".
     /// Keeps the saved domain list by default.
     public func removeAll() throws {
