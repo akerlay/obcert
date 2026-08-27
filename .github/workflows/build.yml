@@ -115,20 +115,24 @@ jobs:
             --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PWD" --wait
           xcrun stapler staple "$APP"
 
-      # ---- Package + upload ----
-      - name: Package .app
+      # ---- Package a drag-to-install .dmg + upload ----
+      - name: Package .dmg
         run: |
-          ditto -c -k --keepParent "$APP" "obcert-universal.zip"
+          STAGE="$RUNNER_TEMP/dmg"
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          cp -R "$APP" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "obcert" -srcfolder "$STAGE" -ov -format UDZO "obcert-universal.dmg"
           echo "Signed identity:"; codesign -dvv "$APP" 2>&1 | grep -E "Authority|Signature" || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: obcert-universal
-          path: obcert-universal.zip
+          name: obcert-universal-dmg
+          path: obcert-universal.dmg
           if-no-files-found: error
 
-  # Attach the universal zip to a GitHub Release when a v* tag is pushed.
+  # Attach the universal .dmg to a GitHub Release when a v* tag is pushed.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
@@ -141,4 +145,4 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/**/*.zip
+          files: dist/**/*.dmg

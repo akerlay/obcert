@@ -16,17 +16,9 @@ struct ActionsPane: View {
                     .disabled(model.isBusy || model.domains.isEmpty)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Для телефона").font(.headline)
-                    Text("Сохранить сертификат: профиль .mobileconfig для iPhone/iPad и .pem для Android.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Button {
-                        model.exportForPhone()
-                    } label: { Text("Экспорт для телефона…").frame(maxWidth: .infinity) }
-                    .disabled(model.isBusy || model.domains.isEmpty)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
+            // Экспорт для телефона временно скрыт из интерфейса.
+            // Код (model.exportForPhone / PhoneExporter) сохранён — вернуть блок можно
+            // обратно сюда, когда фича понадобится.
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Отключить защиту").font(.headline).foregroundStyle(.red)
