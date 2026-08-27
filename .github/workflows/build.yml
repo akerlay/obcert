@@ -53,7 +53,8 @@ jobs:
 
       - name: Generate Xcode project
         working-directory: App/CheburcertApp
-        run: "$XCODEGEN" generate
+        run: |
+          "$XCODEGEN" generate
 
       - name: Build (Release, ${{ matrix.arch }}, ad-hoc signed)
         working-directory: App/CheburcertApp
