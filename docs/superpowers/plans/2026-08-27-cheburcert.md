@@ -208,7 +208,7 @@ final class DomainListTests: XCTestCase {
     }
 
     func testCyrillicConvertedToPunycode() throws {
-        XCTAssertEqual(try DomainList.normalize("сбербанк.рф"), "xn--80aac0aqbb1i.xn--p1ai")
+        XCTAssertEqual(try DomainList.normalize("сбербанк.рф"), "xn--80abap1arsf.xn--p1ai")
     }
 
     func testLeadingDotCyrillicZone() throws {
@@ -480,8 +480,11 @@ struct TestPKI {
     let root: Certificate            // self-signed "Russian Trusted Root CA" analog (RSA)
     let intermediateKey: Certificate.PrivateKey
     let intermediate: Certificate    // signed by root
-    let notBefore = Date(timeIntervalSince1970: 1_700_000_000)
-    let notAfter = Date(timeIntervalSince1970: 2_000_000_000)
+    // Anchored to now (not a fixed epoch): the engine's default validity starts near
+    // Date(), so fixed past dates would make engine-issued certs "not yet valid" at the
+    // test's validationTime and turn the reject test into a false pass on temporal grounds.
+    let notBefore = Date()
+    let notAfter = Date().addingTimeInterval(10 * 365 * 24 * 3600)
 
     init() throws {
         // Root uses RSA to mimic the real Минцифры root (public key gets reused by the cross-cert).
@@ -778,7 +781,8 @@ public enum CryptoEngine {
     }
 
     public static func defaultValidity() -> DateInterval {
-        let start = Date()
+        // Backdate 24h to tolerate client clock skew so freshly-issued anchors validate now.
+        let start = Date().addingTimeInterval(-24 * 3600)
         return DateInterval(start: start, end: start.addingTimeInterval(10 * 365 * 24 * 3600))
     }
 }

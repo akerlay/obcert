@@ -1,1 +1,7 @@
 .superpowers/
+.build/
+.swiftpm/
+
+# XcodeGen-generated project (regenerated from project.yml)
+*.xcodeproj
+App/CheburcertApp/Cheburcert.xcodeproj/
