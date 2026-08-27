@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 import CheburcertCore
 
 @MainActor
@@ -11,6 +12,12 @@ final class AppModel: ObservableObject {
     @Published var isBusy = false
     @Published var lastError: String?
     @Published var installState: InstallState = .notInstalled
+
+    // Original-root gate
+    @Published var originalRootBlocked = false
+    @Published var didCheckOriginal = false
+    private var originalPresence: OriginalRootPresence = .absent
+    private let detector = MintsifryDetector()
 
     let presets = Presets.all
     private let service: CheburcertService
@@ -24,6 +31,7 @@ final class AppModel: ObservableObject {
             firefox: FirefoxInstaller(certutilPath: certutil, workDir: workDir))
         self.domains = service.savedDomains()
         refreshStatus()
+        checkOriginalRoot()
     }
 
     var filteredDomains: [String] {
@@ -41,6 +49,7 @@ final class AppModel: ObservableObject {
     }
 
     func remove(_ domain: String) { domains.removeAll { $0 == domain } }
+    func clearDomains() { domains.removeAll() }
 
     func applyPreset(_ p: DomainPreset) {
         for d in p.domains where !domains.contains(d) { domains.append(d) }
@@ -64,6 +73,50 @@ final class AppModel: ObservableObject {
             catch let e as CheburcertError { lastError = Self.message(for: e) }
             catch { lastError = error.localizedDescription }
             refreshStatus(); isBusy = false
+        }
+    }
+
+    func exportForPhone() {
+        guard !domains.isEmpty else { lastError = "Список доменов пуст."; return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = "Экспортировать сюда"
+        panel.message = "Выберите папку для файлов сертификата"
+        guard panel.runModal() == .OK, let dir = panel.url else { return }
+        isBusy = true; lastError = nil
+        let ds = domains
+        Task {
+            do {
+                let bundle = try await service.buildBundleForExport(domains: ds)
+                let res = try PhoneExporter().export(bundle, to: dir)
+                NSWorkspace.shared.activateFileViewerSelecting([res.mobileconfig])
+            } catch let e as CheburcertError { lastError = Self.message(for: e) }
+            catch { lastError = error.localizedDescription }
+            isBusy = false
+        }
+    }
+
+    func checkOriginalRoot() {
+        Task {
+            let p = (try? detector.detect()) ?? .absent
+            originalPresence = p
+            originalRootBlocked = p.isPresent
+            didCheckOriginal = true
+        }
+    }
+
+    func removeOriginalRoot() {
+        isBusy = true; lastError = nil
+        let p = originalPresence
+        Task {
+            do { try detector.remove(p, privileged: OSAScriptPrivilegedRunner()) }
+            catch let e as CheburcertError { lastError = Self.message(for: e) }
+            catch { lastError = error.localizedDescription }
+            let np = (try? detector.detect()) ?? .absent
+            originalPresence = np
+            originalRootBlocked = np.isPresent
+            isBusy = false
         }
     }
 

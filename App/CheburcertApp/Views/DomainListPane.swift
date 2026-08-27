@@ -9,9 +9,12 @@ struct DomainListPane: View {
                 Text("Разрешённые домены").font(.headline)
                 Text("· \(model.domains.count)").foregroundStyle(.secondary)
                 Spacer()
-                Text("каждый домен включает поддомены")
-                    .font(.caption).foregroundStyle(.secondary)
+                Button("Очистить") { model.clearDomains() }
+                    .controlSize(.small)
+                    .disabled(model.domains.isEmpty)
             }
+            Text("каждый домен включает поддомены")
+                .font(.caption).foregroundStyle(.secondary)
             HStack {
                 TextField("например, sberbank.ru или .ru", text: $model.newDomain)
                     .textFieldStyle(.roundedBorder)

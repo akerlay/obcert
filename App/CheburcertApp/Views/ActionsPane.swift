@@ -18,6 +18,17 @@ struct ActionsPane: View {
             }
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Для телефона").font(.headline)
+                    Text("Сохранить сертификат: профиль .mobileconfig для iPhone/iPad и .pem для Android.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button {
+                        model.exportForPhone()
+                    } label: { Text("Экспорт для телефона…").frame(maxWidth: .infinity) }
+                    .disabled(model.isBusy || model.domains.isEmpty)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Отключить защиту").font(.headline).foregroundStyle(.red)
                     Text("Удалить всё установленное из Safari, Chrome и Firefox.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -29,6 +40,6 @@ struct ActionsPane: View {
             }
             if model.isBusy { ProgressView().padding(.top, 4) }
         }
-        .frame(width: 260)
+        .frame(width: 280)
     }
 }
