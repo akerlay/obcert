@@ -54,10 +54,15 @@ public struct FirefoxInstaller: TrustStoreInstaller {
         }
     }
 
+    /// Directory holding certutil + its bundled NSS modules; certutil is run with this as
+    /// its cwd so it can dlopen the softoken modules (loaded by leaf name at runtime).
+    private var certutilDir: String { (certutilPath as NSString).deletingLastPathComponent }
+
     /// Delete-first (idempotent), then add. Throws `.commandFailed` on any add failure.
     private func add(dir: String, nick: String, trust: String, path: String) throws {
-        _ = try? runner.run(certutilPath, ["-D", "-d", dir, "-n", nick])
-        let res = try runner.run(certutilPath, ["-A", "-d", dir, "-t", trust, "-n", nick, "-i", path])
+        _ = try? runner.run(certutilPath, ["-D", "-d", dir, "-n", nick], workingDirectory: certutilDir)
+        let res = try runner.run(certutilPath, ["-A", "-d", dir, "-t", trust, "-n", nick, "-i", path],
+                                 workingDirectory: certutilDir)
         if res.exitCode != 0 {
             throw CheburcertError.commandFailed(command: "certutil", exitCode: res.exitCode, stderr: res.stderr)
         }
@@ -69,7 +74,7 @@ public struct FirefoxInstaller: TrustStoreInstaller {
         for profile in profilesProvider() {
             let dir = "sql:\(profile.path)"
             for nick in nicks {
-                _ = try? runner.run(certutilPath, ["-D", "-d", dir, "-n", nick])
+                _ = try? runner.run(certutilPath, ["-D", "-d", dir, "-n", nick], workingDirectory: certutilDir)
             }
         }
     }
