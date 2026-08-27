@@ -22,7 +22,8 @@ let package = Package(
         ),
         .testTarget(
             name: "CheburcertCoreTests",
-            dependencies: ["CheburcertCore"]
+            dependencies: ["CheburcertCore"],
+            resources: [.copy("Fixtures")]
         ),
     ]
 )
