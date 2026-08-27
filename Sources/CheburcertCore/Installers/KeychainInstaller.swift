@@ -32,7 +32,10 @@ public struct KeychainInstaller: TrustStoreInstaller {
         self.keychain = keychain
     }
 
+    /// For add-certificates / add-trusted-cert, which take the keychain via `-k`.
     private var keychainArgs: [String] { keychain.map { ["-k", $0] } ?? [] }
+    /// For delete-certificate, which takes the keychain POSITIONALLY (no `-k`).
+    private var keychainPositional: [String] { keychain.map { [$0] } ?? [] }
 
     public func install(_ bundle: TrustBundle) throws {
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
@@ -46,15 +49,24 @@ public struct KeychainInstaller: TrustStoreInstaller {
         // SHA-1 hashes of every cert we install; for idempotent delete-first and the manifest.
         var hashes = [try Self.sha1Hash(bundle.localRoot), try Self.sha1Hash(bundle.crossCert)]
         hashes += try bundle.intermediates.map { try Self.sha1Hash($0) }
+
+        // Self-heal: delete the PREVIOUS run's certs (by the old manifest's hashes) before
+        // overwriting the manifest. Leftover cross-certs/roots from an earlier key generation
+        // produce an inconsistent chain that browsers reject even though the fresh certs are
+        // valid — this removes them safely (only certs we recorded installing).
+        let previousHashes = (try? String(contentsOf: manifestFile, encoding: .utf8))?
+            .split(whereSeparator: \.isNewline).map(String.init) ?? []
         try hashes.joined(separator: "\n").write(to: manifestFile, atomically: true, encoding: .utf8)
 
         // Idempotent cleanup: remove anything a previous apply left (ignore failures).
         // Delete every prior local root BY NAME — when the domain list changes the new
         // root has a different hash, so a hash-only delete would leave the old (stale,
         // differently-constrained) root trusted alongside the new one.
-        _ = try? runner.run("/usr/bin/security", ["delete-certificate", "-c", Self.localRootCN] + keychainArgs)
-        for h in hashes {
-            _ = try? runner.run("/usr/bin/security", ["delete-certificate", "-Z", h] + keychainArgs)
+        // NOTE: `delete-certificate` takes the keychain POSITIONALLY, not via `-k`
+        // (passing `-k` errors with "illegal option" and silently deletes nothing).
+        _ = try? runner.run("/usr/bin/security", ["delete-certificate", "-c", Self.localRootCN] + keychainPositional)
+        for h in Set(hashes + previousHashes) where !h.isEmpty {
+            _ = try? runner.run("/usr/bin/security", ["delete-certificate", "-Z", h] + keychainPositional)
         }
 
         // Add every cert to the keychain first (local root included). This is required:
@@ -74,12 +86,12 @@ public struct KeychainInstaller: TrustStoreInstaller {
         if let manifest = try? String(contentsOf: manifestFile, encoding: .utf8) {
             for h in manifest.split(whereSeparator: \.isNewline) where !h.isEmpty {
                 _ = try? runner.run("/usr/bin/security",
-                                    ["delete-certificate", "-Z", String(h)] + keychainArgs)
+                                    ["delete-certificate", "-Z", String(h)] + keychainPositional)
             }
         }
         // Belt-and-suspenders for the trust anchor (removes cert and its user trust settings).
         _ = try? runner.run("/usr/bin/security",
-                            ["delete-certificate", "-c", Self.localRootCN] + keychainArgs)
+                            ["delete-certificate", "-c", Self.localRootCN, "-t"] + keychainPositional)
     }
 
     /// Run a `security` subcommand, mapping a user cancel to `.authorizationDenied`.

@@ -28,11 +28,28 @@ final class AppModel: ObservableObject {
         let workDir = AppPaths.appSupport.appendingPathComponent("work")
         self.service = CheburcertService(
             fetch: { try await CertFetcher().fetch() },
-            keychain: KeychainInstaller(workDir: workDir),
+            keychain: KeychainInstaller(workDir: workDir, keychain: Self.defaultUserKeychain()),
             firefox: FirefoxInstaller(certutilPath: certutil, workDir: workDir))
         self.domains = service.savedDomains()
         refreshStatus()
         checkOriginalRoot()
+    }
+
+    /// The user's default (login) keychain path. `security add-trusted-cert` must target
+    /// it explicitly with `-k`; without `-k` it silently no-ops and no trust is set.
+    private static func defaultUserKeychain() -> String {
+        let fallback = NSHomeDirectory() + "/Library/Keychains/login.keychain-db"
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        proc.arguments = ["default-keychain", "-d", "user"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = Pipe()
+        do { try proc.run(); proc.waitUntilExit() } catch { return fallback }
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let path = out.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        return path.isEmpty ? fallback : path
     }
 
     var filteredDomains: [String] {
