@@ -128,9 +128,14 @@ xcodebuild -scheme obcert -configuration Release build
 `.github/workflows/build.yml` на каждый push в `main` / PR / вручную:
 
 1. Запускает `swift test`.
-2. Матрицей собирает **два отдельных билда** — `arm64` (раннер `macos-14`) и
-   `x86_64` (раннер `macos-13`), каждый со своим `certutil` под нужную архитектуру.
-3. Кладёт `obcert-arm64.zip` и `obcert-x86_64.zip` в **Artifacts** запуска.
+2. Собирает **universal-бинарь** (arm64 + x86_64) на ARM-раннере `macos-14`
+   кросс-компиляцией. Отдельный Intel-раннер (`macos-13`) не используется — GitHub
+   сворачивает Intel-macOS, и такие джобы часами висят без исполнителя.
+3. Кладёт `obcert-universal.zip` в **Artifacts** запуска.
+
+Нюанс: вложенный `certutil` — только arm64, поэтому на Intel-Маках установка в
+Firefox не сработает; путь через Keychain (Safari/Chrome) — universal и работает на
+обеих архитектурах.
 
 **Подпись.** По умолчанию билды подписаны ad-hoc — запускаются локально, но при
 скачивании Gatekeeper потребует «Открыть» через правый клик. Для полноценной

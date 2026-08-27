@@ -17,17 +17,12 @@ jobs:
       - run: swift test
 
   build:
-    name: Build obcert (${{ matrix.arch }})
+    name: Build obcert (universal)
     needs: test
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-14   # Apple Silicon
-            arch: arm64
-          - runner: macos-13   # Intel
-            arch: x86_64
-    runs-on: ${{ matrix.runner }}
+    # Built on Apple Silicon and cross-compiled to a universal (arm64 + x86_64) binary.
+    # We deliberately do NOT use a separate Intel (macos-13) runner: GitHub is retiring
+    # Intel macOS runners and jobs sit unclaimed for hours.
+    runs-on: macos-14
     env:
       # Hoist secret presence into plain env flags (secrets aren't reliable in `if:`).
       HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
@@ -48,7 +43,9 @@ jobs:
           "$BIN" --version
           echo "XCODEGEN=$BIN" >> "$GITHUB_ENV"
 
-      - name: Bundle self-contained certutil (this arch)
+      - name: Bundle self-contained certutil (arm64)
+        # NOTE: this certutil is arm64-only, so Firefox install won't work on Intel Macs;
+        # the Keychain path (Safari/Chrome) is universal and works on both.
         run: ./scripts/bundle-certutil.sh "$(brew --prefix nss)/bin/certutil"
 
       - name: Generate Xcode project
@@ -62,7 +59,7 @@ jobs:
           xcodebuild -resolvePackageDependencies \
             -project obcert.xcodeproj -scheme obcert -derivedDataPath build
 
-      - name: Build (Release, ${{ matrix.arch }}, ad-hoc signed)
+      - name: Build (Release, universal arm64 + x86_64, ad-hoc signed)
         working-directory: App/CheburcertApp
         run: |
           xcodebuild \
@@ -70,10 +67,13 @@ jobs:
             -scheme obcert \
             -configuration Release \
             -derivedDataPath build \
-            ARCHS=${{ matrix.arch }} ONLY_ACTIVE_ARCH=NO \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
             CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES \
             build
-          echo "APP=$PWD/build/Build/Products/Release/obcert.app" >> "$GITHUB_ENV"
+          APP="$PWD/build/Build/Products/Release/obcert.app"
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "Architectures of the app binary:"
+          lipo -info "$APP/Contents/MacOS/obcert"
 
       # ---- Optional real signing + notarization (only if the secrets are configured) ----
       - name: Import Developer ID certificate
@@ -118,17 +118,17 @@ jobs:
       # ---- Package + upload ----
       - name: Package .app
         run: |
-          ditto -c -k --keepParent "$APP" "obcert-${{ matrix.arch }}.zip"
+          ditto -c -k --keepParent "$APP" "obcert-universal.zip"
           echo "Signed identity:"; codesign -dvv "$APP" 2>&1 | grep -E "Authority|Signature" || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: obcert-${{ matrix.arch }}
-          path: obcert-${{ matrix.arch }}.zip
+          name: obcert-universal
+          path: obcert-universal.zip
           if-no-files-found: error
 
-  # Attach both arch zips to a GitHub Release when a v* tag is pushed.
+  # Attach the universal zip to a GitHub Release when a v* tag is pushed.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
