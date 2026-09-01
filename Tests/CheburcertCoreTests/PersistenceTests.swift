@@ -22,7 +22,7 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(try store.load(), [])
     }
 
-    func testKeyStoreRoundTripsAndSetsMode0600() throws {
+    func testKeyStoreSavesTheCertificateAndNeverTheKey() throws {
         let dir = tempDir()
         let store = KeyStore(keyFile: dir.appendingPathComponent("k.pem"),
                              certFile: dir.appendingPathComponent("r.crt"))
@@ -30,10 +30,22 @@ final class PersistenceTests: XCTestCase {
         let bundle = try CryptoEngine.buildTrustBundle(
             domains: [".ru"], mintsifryRoot: pki.root,
             mintsifryIntermediates: [pki.intermediate])
-        try store.save(key: bundle.localRootKey, localRoot: bundle.localRoot)
+        try store.save(localRoot: bundle.localRoot)
 
-        let attrs = try FileManager.default.attributesOfItem(atPath: store.keyFile.path)
-        XCTAssertEqual((attrs[.posixPermissions] as? NSNumber)?.intValue, 0o600)
-        XCTAssertNotNil(try store.loadKey())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: store.certFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.keyFile.path),
+                       "у KeyStore не должно быть пути, по которому ключ попадает на диск")
+    }
+
+    func testDestroyKeyRemovesOneLeftByAnOlderVersion() throws {
+        let dir = tempDir()
+        let store = KeyStore(keyFile: dir.appendingPathComponent("k.pem"),
+                             certFile: dir.appendingPathComponent("r.crt"))
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try "-----BEGIN PRIVATE KEY-----".write(to: store.keyFile, atomically: true, encoding: .utf8)
+
+        XCTAssertTrue(store.destroyKey(), "должен сообщить, что ключ был найден")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.keyFile.path))
+        XCTAssertFalse(store.destroyKey(), "повторный вызов идемпотентен")
     }
 }
