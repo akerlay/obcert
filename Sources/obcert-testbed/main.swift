@@ -85,9 +85,15 @@ func parseOptions() -> Options {
 }
 
 let options = parseOptions()
-let output = try await TestbedBuilder().build(
-    lanIP: options.ip, port: options.port, tag: options.tag,
-    layout: options.layout, to: options.out)
+let output: TestbedOutput
+if options.layout == .plainIntermediate {
+    output = try await PlainChainTestbed().build(
+        lanIP: options.ip, port: options.port, tag: options.tag, to: options.out)
+} else {
+    output = try await TestbedBuilder().build(
+        lanIP: options.ip, port: options.port, tag: options.tag,
+        layout: options.layout, to: options.out)
+}
 
 print("testbed: \(output.directory.path)")
 print("profile: \(output.manifest.mobileconfig)")

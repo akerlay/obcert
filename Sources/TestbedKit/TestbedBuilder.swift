@@ -62,6 +62,12 @@ public enum ProfileLayout: String, Sendable, CaseIterable {
     case pkcs1
     /// Same, but the cross-certificate is carried as PEM instead of DER.
     case pem
+    /// No cross-signing at all: a plain self-signed root and an ordinary intermediate, with
+    /// the intermediate delivered only by the profile. Separates "the client never uses a
+    /// profile-installed intermediate" from "something about the cross-certificate stops it"
+    /// — the cross-certificate shares its subject and SKI with a root that is not installed,
+    /// and carries a critical nameConstraints extension on a CA.
+    case plainIntermediate
     /// Experiment: the cross-certificate is installed as a trust anchor and the local root
     /// is left out, so no store lookup is needed at all. Only safe if the client enforces
     /// name constraints on an anchor — RFC 5280 §6.1 makes that optional, so this layout

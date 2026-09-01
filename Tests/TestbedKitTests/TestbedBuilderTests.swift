@@ -132,4 +132,38 @@ final class TestbedBuilderTests: XCTestCase {
         // indistinguishable from the previous one in the phone's trust settings.
         XCTAssertTrue(TestbedBuilder.testRootCommonName(tag: "r9").contains("r9"))
     }
+
+    func testPlainLayoutIsolatesStoreLookupFromTheCrossCertificate() async throws {
+        let out = try await PlainChainTestbed().build(
+            lanIP: "192.0.2.10", port: 8443, tag: "p1", to: tempDir())
+
+        // Both cases are permitted; they differ only in who supplies the intermediate, so a
+        // difference in outcome isolates store lookup from everything else.
+        XCTAssertEqual(out.manifest.cases.map(\.name), ["plain", "plainfull"])
+        XCTAssertEqual(out.manifest.cases.map(\.expectation), [.valid, .valid])
+        XCTAssertEqual(out.manifest.cases.map(\.sendsFullChain), [false, true])
+        XCTAssertEqual(out.offlineVerdicts, [.valid, .valid])
+
+        func certCount(_ name: String) throws -> Int {
+            let c = try XCTUnwrap(out.manifest.cases.first { $0.name == name })
+            return try String(contentsOfFile: c.certificateChainPEM, encoding: .utf8)
+                .components(separatedBy: "BEGIN CERTIFICATE").count - 1
+        }
+        XCTAssertEqual(try certCount("plain"), 1, "лист без промежуточного")
+        XCTAssertEqual(try certCount("plainfull"), 2)
+
+        // No name constraints anywhere: this testbed must not accidentally re-test them.
+        let root = try Certificate(
+            pemEncoded: String(contentsOfFile: out.manifest.localRootPEM, encoding: .utf8))
+        XCTAssertNil(try root.extensions.nameConstraints)
+
+        // Its profile must not collide with the other testbeds or with production.
+        let plist = try XCTUnwrap(try PropertyListSerialization.propertyList(
+            from: Data(contentsOf: URL(fileURLWithPath: out.manifest.mobileconfig)),
+            options: [], format: nil) as? [String: Any])
+        XCTAssertEqual(plist["PayloadIdentifier"] as? String, "me.obcert.profile.testbed.plain")
+        let payloads = try XCTUnwrap(plist["PayloadContent"] as? [[String: Any]])
+        XCTAssertEqual(payloads.compactMap { $0["PayloadType"] as? String },
+                       ["com.apple.security.root", "com.apple.security.pkcs1"])
+    }
 }
