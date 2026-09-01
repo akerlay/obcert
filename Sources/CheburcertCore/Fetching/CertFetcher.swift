@@ -11,9 +11,32 @@ public struct FetchedCerts: Sendable {
 
 public struct CertFetcher: Sendable {
     let session: URLSession
-    public init(session: URLSession = .shared) { self.session = session }
+    /// Deadline for the WHOLE fetch, not per request. `URLSession` defaults give 60s per
+    /// request and 7 days per resource; with three sequential sources that is minutes of a
+    /// spinner with no way out, on a path the user reaches from two different buttons.
+    let deadline: Duration
+
+    public init(session: URLSession = .shared, deadline: Duration = .seconds(20)) {
+        self.session = session
+        self.deadline = deadline
+    }
 
     public func fetch(from urls: [URL] = MintsifrySource.urls) async throws -> FetchedCerts {
+        try await withThrowingTaskGroup(of: FetchedCerts?.self) { group in
+            group.addTask { try await self.download(from: urls) }
+            group.addTask {
+                try? await Task.sleep(for: self.deadline)
+                throw CheburcertError.network("превышен таймаут \(self.deadline)")
+            }
+            guard let first = try await group.next(), let result = first else {
+                throw CheburcertError.network("загрузка прервана")
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+
+    private func download(from urls: [URL]) async throws -> FetchedCerts {
         var all: [Certificate] = []
         for url in urls {
             let data: Data

@@ -25,7 +25,8 @@ final class ServiceRemoveTests: XCTestCase {
 
         try await service.apply(domains: ["sberbank.ru"])
         XCTAssertTrue(FileManager.default.fileExists(atPath: keyStore.certFile.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: keyStore.keyFile.path))
+        // The CA key is not persisted at all, so there is nothing here for removeAll to clean.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: keyStore.keyFile.path))
 
         try service.removeAll()
 

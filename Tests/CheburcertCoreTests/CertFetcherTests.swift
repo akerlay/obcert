@@ -22,4 +22,20 @@ final class CertFetcherTests: XCTestCase {
     func testParseRejectsGarbage() {
         XCTAssertThrowsError(try CertFetcher.parsePEMBundle("not a pem"))
     }
+
+    func testFetchFailsFastWhenSourceHangs() async throws {
+        // Discard port: accepts the connection and never answers, so only the deadline
+        // can end the wait.
+        let hanging = URL(string: "https://0.0.0.0:9/never")!
+        let fetcher = CertFetcher(deadline: .milliseconds(300))
+        let started = Date()
+        do {
+            _ = try await fetcher.fetch(from: [hanging])
+            XCTFail("ожидался таймаут")
+        } catch let error as CheburcertError {
+            guard case .network = error else { return XCTFail("ожидалась .network, получено \(error)") }
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 10,
+                          "дедлайн должен обрывать ожидание, а не полагаться на URLSession")
+    }
 }
