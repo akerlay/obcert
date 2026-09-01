@@ -5,3 +5,9 @@
 # XcodeGen-generated project (regenerated from project.yml)
 *.xcodeproj
 App/CheburcertApp/Cheburcert.xcodeproj/
+
+# Python bytecode from scripts/
+__pycache__/
+
+# XcodeGen also drops a .gitignore next to the generated project
+App/CheburcertApp/.gitignore

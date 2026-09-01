@@ -12,7 +12,41 @@ public struct PhoneExportResult: Equatable, Sendable {
 ///  - an iOS/iPadOS `.mobileconfig` configuration profile (unsigned XML plist), and
 ///  - Android-friendly `.pem` files.
 public struct PhoneExporter: Sendable {
-    public init() {}
+    /// Profile identity. iOS keys installed profiles by `PayloadIdentifier`: installing a
+    /// second profile with the same one silently REPLACES the first. A testbed profile must
+    /// therefore never reuse the production identifier, or trying the testbed quietly
+    /// removes the protection the user actually relies on.
+    public struct Identity: Sendable {
+        /// How the cross-certificate is carried. Both install a certificate; they differ
+        /// only in encoding, which is worth being able to vary because iOS does not use
+        /// the pkcs1-installed one for path building and the cause is not yet known.
+        public enum CrossPayload: String, Sendable {
+            case pkcs1 = "com.apple.security.pkcs1"
+            case pem = "com.apple.security.pem"
+        }
+
+        public let identifier: String
+        public let displayName: String
+        public let fileName: String
+        public let crossPayload: CrossPayload
+
+        public init(identifier: String, displayName: String, fileName: String,
+                    crossPayload: CrossPayload = .pkcs1) {
+            self.identifier = identifier
+            self.displayName = displayName
+            self.fileName = fileName
+            self.crossPayload = crossPayload
+        }
+
+        public static let production = Identity(
+            identifier: "me.obcert.profile",
+            displayName: "obcert — доверенный корень",
+            fileName: "obcert.mobileconfig")
+    }
+
+    let identity: Identity
+
+    public init(identity: Identity = .production) { self.identity = identity }
 
     /// Writes obcert.mobileconfig and Android .pem files into `directory` (created if needed).
     @discardableResult
@@ -21,15 +55,15 @@ public struct PhoneExporter: Sendable {
 
         // --- Configuration profile (.mobileconfig) ---
         var payloads: [[String: Any]] = []
-        payloads.append(try Self.certPayload(
+        payloads.append(try certPayload(
             bundle.localRoot, type: "com.apple.security.root",
             fileName: "obcert-root.cer", displayName: "obcert Local Constrained Root"))
-        payloads.append(try Self.certPayload(
-            bundle.crossCert, type: "com.apple.security.pkcs1",
+        payloads.append(try certPayload(
+            bundle.crossCert, type: identity.crossPayload.rawValue,
             fileName: "obcert-cross.cer", displayName: "obcert Cross Certificate"))
         for (i, cert) in bundle.intermediates.enumerated() {
-            payloads.append(try Self.certPayload(
-                cert, type: "com.apple.security.pkcs1",
+            payloads.append(try certPayload(
+                cert, type: identity.crossPayload.rawValue,
                 fileName: "obcert-intermediate-\(i).cer",
                 displayName: "obcert Intermediate \(i)"))
         }
@@ -37,8 +71,8 @@ public struct PhoneExporter: Sendable {
         let profile: [String: Any] = [
             "PayloadType": "Configuration",
             "PayloadVersion": 1,
-            "PayloadDisplayName": "obcert — доверенный корень",
-            "PayloadIdentifier": "me.obcert.profile",
+            "PayloadDisplayName": identity.displayName,
+            "PayloadIdentifier": identity.identifier,
             "PayloadUUID": UUID().uuidString,
             "PayloadDescription": "Устанавливает ограниченный (name-constrained) корневой сертификат obcert, "
                 + "чтобы доверять только заданным российским доменам.",
@@ -47,7 +81,7 @@ public struct PhoneExporter: Sendable {
 
         let plistData = try PropertyListSerialization.data(
             fromPropertyList: profile, format: .xml, options: 0)
-        let mobileconfig = directory.appendingPathComponent("obcert.mobileconfig")
+        let mobileconfig = directory.appendingPathComponent(identity.fileName)
         try plistData.write(to: mobileconfig, options: .atomic)
 
         // --- Android-friendly PEM files ---
@@ -62,16 +96,19 @@ public struct PhoneExporter: Sendable {
     }
 
     /// Build one certificate payload dict for the configuration profile.
-    private static func certPayload(
+    private func certPayload(
         _ cert: Certificate, type: String, fileName: String, displayName: String
     ) throws -> [String: Any] {
         [
             "PayloadType": type,
             "PayloadVersion": 1,
-            "PayloadContent": try der(cert),
+            // A pem payload must carry PEM text; a pkcs1 payload carries raw DER.
+            "PayloadContent": type == Identity.CrossPayload.pem.rawValue
+                ? Data(try cert.serializeAsPEM().pemString.utf8)
+                : try Self.der(cert),
             "PayloadCertificateFileName": fileName,
             "PayloadDisplayName": displayName,
-            "PayloadIdentifier": "me.obcert.profile.\(UUID().uuidString)",
+            "PayloadIdentifier": "\(identity.identifier).\(UUID().uuidString)",
             "PayloadUUID": UUID().uuidString,
         ]
     }

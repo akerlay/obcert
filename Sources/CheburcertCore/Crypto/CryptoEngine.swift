@@ -5,12 +5,16 @@ import SwiftASN1
 
 public enum CryptoEngine {
     /// Build the constrained trust bundle for a domain list.
+    /// - Parameter localRootCommonName: subject CN of the generated root. Anything other
+    ///   than the default belongs to a testbed: two roots sharing a CN are indistinguishable
+    ///   in the iOS trust settings, where the CN is all the user is shown.
     public static func buildTrustBundle(
         domains: [String],
         mintsifryRoot: Certificate,
         mintsifryIntermediates: [Certificate],
         validity: DateInterval = defaultValidity(),
-        localKeyOverride: Certificate.PrivateKey? = nil
+        localKeyOverride: Certificate.PrivateKey? = nil,
+        localRootCommonName: String = KeychainInstaller.localRootCN
     ) throws -> TrustBundle {
         guard !domains.isEmpty else { throw CheburcertError.cryptoFailure("empty domain list") }
 
@@ -19,7 +23,7 @@ public enum CryptoEngine {
         // 1. Local constrained root CA (ECDSA P384).
         let localKey = localKeyOverride ?? Certificate.PrivateKey(P384.Signing.PrivateKey())
         let localDN = try DistinguishedName {
-            CommonName("obcert Local Constrained Root")
+            CommonName(localRootCommonName)
             OrganizationName("obcert")
         }
         let localSKI = SubjectKeyIdentifier(hash: localKey.publicKey)

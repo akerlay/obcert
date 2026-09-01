@@ -32,6 +32,10 @@ let package = Package(
                 .product(name: "_CryptoExtras", package: "swift-crypto"),
             ]
         ),
+        .executableTarget(
+            name: "obcert-testbed",
+            dependencies: ["TestbedKit", "CheburcertCore"]
+        ),
         .testTarget(
             name: "CheburcertCoreTests",
             dependencies: ["CheburcertCore", "TestbedKit"],
