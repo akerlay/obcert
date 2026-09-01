@@ -86,7 +86,11 @@ public struct PhoneExporter: Sendable {
     @discardableResult
     private static func writePEM(_ cert: Certificate, name: String, in dir: URL) throws -> URL {
         let url = dir.appendingPathComponent(name)
-        try cert.serializeAsPEM().pemString.write(to: url, atomically: true, encoding: .utf8)
+        // Trailing newline matters: without it, concatenating two exported files puts
+        // "-----END CERTIFICATE----------BEGIN CERTIFICATE-----" on one line and the whole
+        // bundle becomes unparseable to OpenSSL and friends.
+        let pem = try cert.serializeAsPEM().pemString + "\n"
+        try pem.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
 }
