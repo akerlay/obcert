@@ -65,12 +65,32 @@ public enum CryptoEngine {
     }
 
     static func makeNameConstraints(domains: [String]) throws -> Certificate.Extension {
-        let ipv4Any = ASN1OctetString(contentBytes: ArraySlice([UInt8](repeating: 0, count: 8)))
-        let ipv6Any = ASN1OctetString(contentBytes: ArraySlice([UInt8](repeating: 0, count: 32)))
         let nc = NameConstraints(
             permittedDNSDomains: domains,
-            excludedIPRanges: [ipv4Any, ipv6Any])
+            excludedIPRanges: allIPRanges())
         return try Certificate.Extension(nc, critical: true)
+    }
+
+    /// Excluded subtrees covering every IPv4 and IPv6 address.
+    ///
+    /// A single `0.0.0.0/0` cannot be used: RFC 5280 requires an IP name constraint to be a
+    /// CIDR subnet, and verifiers reject an all-zero mask as malformed rather than reading it
+    /// as "everything" — swift-certificates bails out on `mask.first == 0`, which silently
+    /// turned the whole exclusion into a no-op. Two `/1` subtrees tile the same space with
+    /// masks that are valid CIDR, so the exclusion actually applies.
+    static func allIPRanges() -> [ASN1OctetString] {
+        func subtree(addressBytes: Int, highBitSet: Bool) -> ASN1OctetString {
+            var bytes = [UInt8](repeating: 0, count: addressBytes * 2)
+            if highBitSet { bytes[0] = 0x80 }         // base 128.0.0.0 / 8000::
+            bytes[addressBytes] = 0x80                // mask /1
+            return ASN1OctetString(contentBytes: ArraySlice(bytes))
+        }
+        return [
+            subtree(addressBytes: 4, highBitSet: false),
+            subtree(addressBytes: 4, highBitSet: true),
+            subtree(addressBytes: 16, highBitSet: false),
+            subtree(addressBytes: 16, highBitSet: true),
+        ]
     }
 
     /// Reuse the root's own SKI bytes if it publishes one; otherwise compute the standard hash.

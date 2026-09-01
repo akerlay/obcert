@@ -51,6 +51,19 @@ final class CryptoEngineTests: XCTestCase {
         }
     }
 
+    func testChainRejectedForIPAddressLeaf() async throws {
+        let pki = try TestPKI()
+        let bundle = try CryptoEngine.buildTrustBundle(
+            domains: [".ru"], mintsifryRoot: pki.root, mintsifryIntermediates: [pki.intermediate])
+        let ipLeaf = try pki.leaf(ipv4: "192.0.2.10")
+
+        let ok = await ChainSelfCheck.validates(
+            leaf: ipLeaf, intermediates: [pki.intermediate, bundle.crossCert],
+            localRoot: bundle.localRoot, at: pki.notBefore.addingTimeInterval(1))
+
+        XCTAssertFalse(ok, "лист с iPAddress SAN должен отсекаться excludedIPRanges")
+    }
+
     func testLocalRootHasCriticalNameConstraints() throws {
         let pki = try TestPKI()
         let bundle = try CryptoEngine.buildTrustBundle(
